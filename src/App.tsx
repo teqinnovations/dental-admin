@@ -15,6 +15,7 @@ import Reports from "./pages/Reports";
 import Gmail from "./pages/Gmail";
 import ImportExport from "./pages/ImportExport";
 import Login from "./pages/Login";
+import SetupAdmin from "./pages/SetupAdmin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/setup-admin" element={<SetupAdmin />} />
       <Route
         path="/"
         element={
