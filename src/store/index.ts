@@ -4,6 +4,7 @@ import appointmentsReducer from './slices/appointmentsSlice';
 import reportsReducer from './slices/reportsSlice';
 import gmailReducer from './slices/gmailSlice';
 import uiReducer from './slices/uiSlice';
+import authReducer from './slices/authSlice';
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     reports: reportsReducer,
     gmail: gmailReducer,
     ui: uiReducer,
+    auth: authReducer,
   },
 });
 
