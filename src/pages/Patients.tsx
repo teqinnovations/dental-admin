@@ -1,16 +1,73 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
-import { setSearchQuery, setFilterStatus, deletePatient, setSelectedPatient, Patient } from '@/store/slices/patientsSlice';
-import { Search, Plus, Filter, Eye, Edit, Trash2, X, User, Phone, Mail, Calendar } from 'lucide-react';
+import { setSearchQuery, setFilterStatus, deletePatient, setSelectedPatient, setPatients, setLoading, Patient } from '@/store/slices/patientsSlice';
+import { Search, Plus, Filter, Eye, Edit, Trash2, X, User, Phone, Mail, Calendar, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { patientsApi, PatientData } from '@/services/patientsApi';
 
 export default function Patients() {
   const dispatch = useAppDispatch();
-  const { patients, searchQuery, filterStatus, selectedPatient } = useAppSelector((state) => state.patients);
+  const { patients, searchQuery, filterStatus, selectedPatient, isLoading } = useAppSelector((state) => state.patients);
   const [showPatientModal, setShowPatientModal] = useState(false);
   const [modalMode, setModalMode] = useState<'view' | 'edit' | 'add'>('view');
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    dateOfBirth: '',
+    address: '',
+    insuranceProvider: '',
+    insuranceId: '',
+    medicalHistory: '',
+    allergies: '',
+    status: 'active' as 'active' | 'inactive',
+    notes: '',
+  });
+
+  // Fetch patients on mount
+  useEffect(() => {
+    loadPatients();
+  }, []);
+
+  const loadPatients = async () => {
+    dispatch(setLoading(true));
+    try {
+      const data = await patientsApi.getAll();
+      // Transform API data to match Redux state
+      const transformedPatients: Patient[] = data.map((p) => {
+        const nameParts = p.name.split(' ');
+        return {
+          id: p.id,
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' ') || '',
+          email: p.email,
+          phone: p.phone,
+          dateOfBirth: p.dateOfBirth,
+          gender: 'other' as const,
+          address: p.address,
+          insuranceProvider: p.insuranceProvider || '',
+          insuranceId: p.insuranceId || '',
+          medicalHistory: p.medicalHistory || '',
+          allergies: p.allergies || '',
+          notes: '',
+          status: p.status,
+          lastVisit: p.lastVisit || new Date().toISOString().split('T')[0],
+        };
+      });
+      dispatch(setPatients(transformedPatients));
+    } catch (error) {
+      console.error('Failed to load patients:', error);
+      toast.error('Failed to load patients');
+    } finally {
+      dispatch(setLoading(false));
+    }
+  };
 
   const filteredPatients = patients.filter(patient => {
     const matchesSearch = 
@@ -32,25 +89,110 @@ export default function Patients() {
 
   const handleEdit = (patient: Patient) => {
     dispatch(setSelectedPatient(patient));
+    setFormData({
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      email: patient.email,
+      phone: patient.phone,
+      dateOfBirth: patient.dateOfBirth,
+      address: patient.address,
+      insuranceProvider: patient.insuranceProvider,
+      insuranceId: patient.insuranceId,
+      medicalHistory: '',
+      allergies: '',
+      status: patient.status,
+      notes: patient.notes,
+    });
     setModalMode('edit');
     setShowPatientModal(true);
   };
 
   const handleAdd = () => {
     dispatch(setSelectedPatient(null));
+    setFormData({
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      dateOfBirth: '',
+      address: '',
+      insuranceProvider: '',
+      insuranceId: '',
+      medicalHistory: '',
+      allergies: '',
+      status: 'active',
+      notes: '',
+    });
     setModalMode('add');
     setShowPatientModal(true);
   };
 
-  const handleDelete = (patientId: string) => {
-    dispatch(deletePatient(patientId));
-    toast.success('Patient deleted successfully');
+  const handleDelete = async (patientId: string) => {
+    if (!confirm('Are you sure you want to delete this patient?')) return;
+    
+    try {
+      await patientsApi.delete(patientId);
+      dispatch(deletePatient(patientId));
+      toast.success('Patient deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete patient:', error);
+      toast.error('Failed to delete patient');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const patientData: PatientData = {
+        name: `${formData.firstName} ${formData.lastName}`,
+        email: formData.email,
+        phone: formData.phone,
+        dateOfBirth: formData.dateOfBirth,
+        address: formData.address,
+        insuranceProvider: formData.insuranceProvider,
+        insuranceId: formData.insuranceId,
+        medicalHistory: formData.medicalHistory,
+        allergies: formData.allergies,
+        status: formData.status,
+      };
+
+      if (modalMode === 'add') {
+        await patientsApi.create(patientData);
+        toast.success('Patient added successfully');
+      } else if (modalMode === 'edit' && selectedPatient) {
+        await patientsApi.update(selectedPatient.id, patientData);
+        toast.success('Patient updated successfully');
+      }
+
+      closeModal();
+      loadPatients(); // Reload data
+    } catch (error) {
+      console.error('Failed to save patient:', error);
+      toast.error('Failed to save patient');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const closeModal = () => {
     setShowPatientModal(false);
     dispatch(setSelectedPatient(null));
   };
+
+  if (isLoading && patients.length === 0) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -210,7 +352,7 @@ export default function Patients() {
             </div>
 
             <div className="p-6">
-              {selectedPatient && (modalMode === 'view' || modalMode === 'edit') ? (
+              {selectedPatient && modalMode === 'view' ? (
                 <div className="space-y-6">
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -280,56 +422,115 @@ export default function Patients() {
                       <p className="text-sm text-foreground">{selectedPatient.notes}</p>
                     </div>
                   </div>
-
-                  {modalMode === 'edit' && (
-                    <div className="flex gap-3 pt-4">
-                      <button onClick={closeModal} className="flex-1 action-button-secondary">
-                        Cancel
-                      </button>
-                      <button 
-                        onClick={() => {
-                          toast.success('Patient updated successfully');
-                          closeModal();
-                        }} 
-                        className="flex-1 action-button-primary"
-                      >
-                        Save Changes
-                      </button>
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-foreground mb-1 block">First Name</label>
-                      <input type="text" className="input-field" placeholder="John" />
+                      <label className="text-sm font-medium text-foreground mb-1 block">First Name *</label>
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="John" 
+                        value={formData.firstName}
+                        onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                      />
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-foreground mb-1 block">Last Name</label>
-                      <input type="text" className="input-field" placeholder="Doe" />
+                      <label className="text-sm font-medium text-foreground mb-1 block">Last Name *</label>
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="Doe" 
+                        value={formData.lastName}
+                        onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                      />
                     </div>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">Email</label>
-                    <input type="email" className="input-field" placeholder="john.doe@email.com" />
+                    <label className="text-sm font-medium text-foreground mb-1 block">Email *</label>
+                    <input 
+                      type="email" 
+                      className="input-field" 
+                      placeholder="john.doe@email.com" 
+                      value={formData.email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-foreground mb-1 block">Phone</label>
-                    <input type="tel" className="input-field" placeholder="(555) 123-4567" />
+                    <label className="text-sm font-medium text-foreground mb-1 block">Phone *</label>
+                    <input 
+                      type="tel" 
+                      className="input-field" 
+                      placeholder="(555) 123-4567" 
+                      value={formData.phone}
+                      onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">Date of Birth</label>
+                    <input 
+                      type="date" 
+                      className="input-field" 
+                      value={formData.dateOfBirth}
+                      onChange={(e) => setFormData(prev => ({ ...prev, dateOfBirth: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">Address</label>
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="123 Main St" 
+                      value={formData.address}
+                      onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1 block">Insurance Provider</label>
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="Aetna" 
+                        value={formData.insuranceProvider}
+                        onChange={(e) => setFormData(prev => ({ ...prev, insuranceProvider: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-foreground mb-1 block">Insurance ID</label>
+                      <input 
+                        type="text" 
+                        className="input-field" 
+                        placeholder="ABC123" 
+                        value={formData.insuranceId}
+                        onChange={(e) => setFormData(prev => ({ ...prev, insuranceId: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1 block">Status</label>
+                    <select 
+                      className="input-field"
+                      value={formData.status}
+                      onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))}
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
                   </div>
                   <div className="flex gap-3 pt-4">
-                    <button onClick={closeModal} className="flex-1 action-button-secondary">
+                    <button onClick={closeModal} className="flex-1 action-button-secondary" disabled={isSaving}>
                       Cancel
                     </button>
                     <button 
-                      onClick={() => {
-                        toast.success('Patient added successfully');
-                        closeModal();
-                      }} 
+                      onClick={handleSave}
+                      disabled={isSaving}
                       className="flex-1 action-button-primary"
                     >
-                      Add Patient
+                      {isSaving ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : modalMode === 'add' ? 'Add Patient' : 'Save Changes'}
                     </button>
                   </div>
                 </div>

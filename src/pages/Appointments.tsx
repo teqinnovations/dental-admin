@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
-import { setViewMode, setFilterStatus, Appointment } from '@/store/slices/appointmentsSlice';
-import { Calendar, List, Plus, Clock, User, ChevronLeft, ChevronRight } from 'lucide-react';
+import { setViewMode, setFilterStatus, setAppointments, setLoading, deleteAppointment, Appointment } from '@/store/slices/appointmentsSlice';
+import { Calendar, List, Plus, Clock, User, ChevronLeft, ChevronRight, Eye, Edit, Trash2, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { appointmentsApi, AppointmentData } from '@/services/appointmentsApi';
+import { patientsApi } from '@/services/patientsApi';
 
 const statusColors = {
   scheduled: 'bg-info/10 text-info border-info/30',
@@ -25,11 +27,74 @@ const typeColors = {
   other: 'bg-muted-foreground',
 };
 
+interface PatientOption {
+  id: string;
+  name: string;
+}
+
 export default function Appointments() {
   const dispatch = useAppDispatch();
-  const { appointments, viewMode, filterStatus } = useAppSelector((state) => state.appointments);
+  const { appointments, viewMode, filterStatus, isLoading } = useAppSelector((state) => state.appointments);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [patients, setPatients] = useState<PatientOption[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Form state
+  const [formData, setFormData] = useState({
+    patientId: '',
+    patientName: '',
+    date: '',
+    time: '',
+    duration: 30,
+    type: 'checkup' as AppointmentData['type'],
+    dentist: 'Dr. Smith',
+    status: 'scheduled' as AppointmentData['status'],
+    notes: '',
+  });
+
+  // Fetch appointments and patients on mount
+  useEffect(() => {
+    loadAppointments();
+    loadPatients();
+  }, []);
+
+  const loadAppointments = async () => {
+    dispatch(setLoading(true));
+    try {
+      const data = await appointmentsApi.getAll();
+      const transformedAppointments: Appointment[] = data.map((a) => ({
+        id: a.id,
+        patientId: a.patientId || '',
+        patientName: a.patientName,
+        date: a.date,
+        time: a.time,
+        duration: a.duration,
+        type: a.type,
+        dentist: a.dentist,
+        status: a.status,
+        notes: a.notes || '',
+        createdAt: a.createdAt,
+      }));
+      dispatch(setAppointments(transformedAppointments));
+    } catch (error) {
+      console.error('Failed to load appointments:', error);
+      toast.error('Failed to load appointments');
+    } finally {
+      dispatch(setLoading(false));
+    }
+  };
+
+  const loadPatients = async () => {
+    try {
+      const data = await patientsApi.getAll();
+      setPatients(data.map(p => ({ id: p.id, name: p.name })));
+    } catch (error) {
+      console.error('Failed to load patients:', error);
+    }
+  };
 
   const filteredAppointments = appointments.filter(apt => {
     if (filterStatus === 'all') return true;
@@ -46,12 +111,10 @@ export default function Appointments() {
     const lastDay = new Date(year, month + 1, 0);
     const days = [];
     
-    // Add empty slots for days before the first day of the month
     for (let i = 0; i < firstDay.getDay(); i++) {
       days.push(null);
     }
     
-    // Add all days of the month
     for (let i = 1; i <= lastDay.getDate(); i++) {
       days.push(new Date(year, month, i));
     }
@@ -75,6 +138,108 @@ export default function Appointments() {
 
   const days = getDaysInMonth(currentDate);
 
+  const handleAdd = () => {
+    setFormData({
+      patientId: '',
+      patientName: '',
+      date: '',
+      time: '',
+      duration: 30,
+      type: 'checkup',
+      dentist: 'Dr. Smith',
+      status: 'scheduled',
+      notes: '',
+    });
+    setShowAddModal(true);
+  };
+
+  const handleEdit = (apt: Appointment) => {
+    setSelectedAppointment(apt);
+    setFormData({
+      patientId: apt.patientId,
+      patientName: apt.patientName,
+      date: apt.date,
+      time: apt.time,
+      duration: apt.duration,
+      type: apt.type,
+      dentist: apt.dentist,
+      status: apt.status,
+      notes: apt.notes,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleDelete = async (appointmentId: string) => {
+    if (!confirm('Are you sure you want to delete this appointment?')) return;
+    
+    try {
+      await appointmentsApi.delete(appointmentId);
+      dispatch(deleteAppointment(appointmentId));
+      toast.success('Appointment deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete appointment:', error);
+      toast.error('Failed to delete appointment');
+    }
+  };
+
+  const handlePatientChange = (patientId: string) => {
+    const patient = patients.find(p => p.id === patientId);
+    setFormData(prev => ({
+      ...prev,
+      patientId,
+      patientName: patient?.name || '',
+    }));
+  };
+
+  const handleSave = async (isEdit: boolean) => {
+    if (!formData.patientName || !formData.date || !formData.time) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const appointmentData: AppointmentData = {
+        patientId: formData.patientId || undefined,
+        patientName: formData.patientName,
+        date: formData.date,
+        time: formData.time,
+        duration: formData.duration,
+        type: formData.type,
+        dentist: formData.dentist,
+        status: formData.status,
+        notes: formData.notes,
+      };
+
+      if (isEdit && selectedAppointment) {
+        await appointmentsApi.update(selectedAppointment.id, appointmentData);
+        toast.success('Appointment updated successfully');
+        setShowEditModal(false);
+      } else {
+        await appointmentsApi.create(appointmentData);
+        toast.success('Appointment created successfully');
+        setShowAddModal(false);
+      }
+
+      loadAppointments();
+    } catch (error) {
+      console.error('Failed to save appointment:', error);
+      toast.error('Failed to save appointment');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading && appointments.length === 0) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="mb-8">
@@ -84,7 +249,7 @@ export default function Appointments() {
             <p className="text-muted-foreground">Schedule and manage patient appointments</p>
           </div>
           <button 
-            onClick={() => setShowAddModal(true)}
+            onClick={handleAdd}
             className="action-button-primary gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -149,14 +314,14 @@ export default function Appointments() {
                   <th className="hidden md:table-cell">Type</th>
                   <th className="hidden lg:table-cell">Dentist</th>
                   <th>Status</th>
-                  <th className="hidden sm:table-cell">Duration</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredAppointments.map((apt, index) => (
                   <tr 
                     key={apt.id}
-                    className="animate-slide-up cursor-pointer"
+                    className="animate-slide-up"
                     style={{ animationDelay: `${index * 30}ms` }}
                   >
                     <td>
@@ -194,7 +359,24 @@ export default function Appointments() {
                         {apt.status.replace('-', ' ')}
                       </span>
                     </td>
-                    <td className="hidden sm:table-cell text-muted-foreground">{apt.duration} min</td>
+                    <td>
+                      <div className="flex items-center gap-1">
+                        <button 
+                          onClick={() => handleEdit(apt)}
+                          className="action-button-ghost p-2"
+                          title="Edit"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(apt.id)}
+                          className="action-button-ghost p-2 text-destructive hover:bg-destructive/10"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -297,77 +479,144 @@ export default function Appointments() {
         </div>
       )}
 
-      {/* Add Appointment Modal */}
-      {showAddModal && (
+      {/* Add/Edit Appointment Modal */}
+      {(showAddModal || showEditModal) && (
         <div className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card rounded-2xl shadow-xl w-full max-w-lg animate-scale-in">
             <div className="flex items-center justify-between p-6 border-b border-border">
-              <h2 className="text-xl font-semibold text-foreground">New Appointment</h2>
+              <h2 className="text-xl font-semibold text-foreground">
+                {showEditModal ? 'Edit Appointment' : 'New Appointment'}
+              </h2>
               <button 
-                onClick={() => setShowAddModal(false)} 
+                onClick={() => { setShowAddModal(false); setShowEditModal(false); }} 
                 className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center"
               >
-                ×
+                <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="text-sm font-medium text-foreground mb-1 block">Patient</label>
-                <select className="input-field">
-                  <option>Select a patient</option>
-                  <option>Sarah Johnson</option>
-                  <option>Michael Chen</option>
-                  <option>Emily Rodriguez</option>
+                <label className="text-sm font-medium text-foreground mb-1 block">Patient *</label>
+                <select 
+                  className="input-field"
+                  value={formData.patientId}
+                  onChange={(e) => handlePatientChange(e.target.value)}
+                >
+                  <option value="">Select a patient</option>
+                  {patients.map(patient => (
+                    <option key={patient.id} value={patient.id}>{patient.name}</option>
+                  ))}
                 </select>
+                {!formData.patientId && (
+                  <input 
+                    type="text" 
+                    className="input-field mt-2" 
+                    placeholder="Or enter patient name manually"
+                    value={formData.patientName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, patientName: e.target.value }))}
+                  />
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">Date</label>
-                  <input type="date" className="input-field" />
+                  <label className="text-sm font-medium text-foreground mb-1 block">Date *</label>
+                  <input 
+                    type="date" 
+                    className="input-field" 
+                    value={formData.date}
+                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                  />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">Time</label>
-                  <input type="time" className="input-field" />
+                  <label className="text-sm font-medium text-foreground mb-1 block">Time *</label>
+                  <input 
+                    type="time" 
+                    className="input-field" 
+                    value={formData.time}
+                    onChange={(e) => setFormData(prev => ({ ...prev, time: e.target.value }))}
+                  />
                 </div>
               </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1 block">Type</label>
-                <select className="input-field">
-                  <option value="checkup">Checkup</option>
-                  <option value="cleaning">Cleaning</option>
-                  <option value="filling">Filling</option>
-                  <option value="extraction">Extraction</option>
-                  <option value="root-canal">Root Canal</option>
-                  <option value="crown">Crown</option>
-                  <option value="other">Other</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1 block">Duration (min)</label>
+                  <input 
+                    type="number" 
+                    className="input-field" 
+                    value={formData.duration}
+                    onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) || 30 }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1 block">Type</label>
+                  <select 
+                    className="input-field"
+                    value={formData.type}
+                    onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value as AppointmentData['type'] }))}
+                  >
+                    <option value="checkup">Checkup</option>
+                    <option value="cleaning">Cleaning</option>
+                    <option value="filling">Filling</option>
+                    <option value="extraction">Extraction</option>
+                    <option value="root-canal">Root Canal</option>
+                    <option value="crown">Crown</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1 block">Dentist</label>
-                <select className="input-field">
-                  <option>Dr. Smith</option>
-                  <option>Dr. Johnson</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1 block">Dentist</label>
+                  <select 
+                    className="input-field"
+                    value={formData.dentist}
+                    onChange={(e) => setFormData(prev => ({ ...prev, dentist: e.target.value }))}
+                  >
+                    <option>Dr. Smith</option>
+                    <option>Dr. Johnson</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground mb-1 block">Status</label>
+                  <select 
+                    className="input-field"
+                    value={formData.status}
+                    onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as AppointmentData['status'] }))}
+                  >
+                    <option value="scheduled">Scheduled</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="no-show">No Show</option>
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground mb-1 block">Notes</label>
-                <textarea className="input-field h-20 resize-none" placeholder="Additional notes..." />
+                <textarea 
+                  className="input-field h-20 resize-none" 
+                  placeholder="Additional notes..."
+                  value={formData.notes}
+                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                />
               </div>
               <div className="flex gap-3 pt-4">
                 <button 
-                  onClick={() => setShowAddModal(false)} 
+                  onClick={() => { setShowAddModal(false); setShowEditModal(false); }} 
                   className="flex-1 action-button-secondary"
+                  disabled={isSaving}
                 >
                   Cancel
                 </button>
                 <button 
-                  onClick={() => {
-                    toast.success('Appointment created successfully');
-                    setShowAddModal(false);
-                  }}
+                  onClick={() => handleSave(showEditModal)}
+                  disabled={isSaving}
                   className="flex-1 action-button-primary"
                 >
-                  Create Appointment
+                  {isSaving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : showEditModal ? 'Save Changes' : 'Create Appointment'}
                 </button>
               </div>
             </div>
