@@ -23,3 +23,9 @@ additional_redirect_urls = ["https://localhost:3000"]
 
 [functions.create-admin-user]
 verify_jwt = false
+
+[functions.patients]
+verify_jwt = false
+
+[functions.appointments]
+verify_jwt = false
