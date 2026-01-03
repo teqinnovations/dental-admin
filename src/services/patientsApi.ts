@@ -105,6 +105,32 @@ export const patientsApi = {
     return transformPatient(result.data);
   },
 
+  // Create quick patient with minimal info (for appointment flow)
+  async createQuick(name: string, phone: string = '', email: string = '') {
+    const patient: PatientData = {
+      name,
+      email: email || `${name.toLowerCase().replace(/\s+/g, '.')}@placeholder.com`,
+      phone: phone || '000-000-0000',
+      dateOfBirth: '2000-01-01',
+      address: 'Not provided',
+      status: 'active',
+    };
+
+    const response = await fetch(FUNCTION_URL, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(patient),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to create patient');
+    }
+
+    const result = await response.json();
+    return transformPatient(result.data);
+  },
+
   // Update patient
   async update(id: string, patient: PatientData) {
     const response = await fetch(`${FUNCTION_URL}?id=${id}`, {

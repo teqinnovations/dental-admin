@@ -49,6 +49,8 @@ export default function Appointments() {
   const [formData, setFormData] = useState({
     patientId: '',
     patientName: '',
+    newPatientPhone: '',
+    newPatientEmail: '',
     date: '',
     time: '',
     duration: 30,
@@ -58,6 +60,7 @@ export default function Appointments() {
     status: 'scheduled' as AppointmentData['status'],
     notes: '',
   });
+  const [isAddingNewPatient, setIsAddingNewPatient] = useState(false);
 
   // Fetch appointments, patients, and dentists on mount
   useEffect(() => {
@@ -163,6 +166,8 @@ export default function Appointments() {
     setFormData({
       patientId: '',
       patientName: '',
+      newPatientPhone: '',
+      newPatientEmail: '',
       date: '',
       time: '',
       duration: 30,
@@ -172,6 +177,7 @@ export default function Appointments() {
       status: 'scheduled',
       notes: '',
     });
+    setIsAddingNewPatient(false);
     setShowAddModal(true);
   };
 
@@ -180,6 +186,8 @@ export default function Appointments() {
     setFormData({
       patientId: apt.patientId,
       patientName: apt.patientName,
+      newPatientPhone: '',
+      newPatientEmail: '',
       date: apt.date,
       time: apt.time,
       duration: apt.duration,
@@ -189,6 +197,7 @@ export default function Appointments() {
       status: apt.status,
       notes: apt.notes,
     });
+    setIsAddingNewPatient(false);
     setShowEditModal(true);
   };
 
@@ -231,8 +240,23 @@ export default function Appointments() {
 
     setIsSaving(true);
     try {
+      let patientId = formData.patientId;
+
+      // If adding a new patient (no patientId selected but name entered manually)
+      if (!patientId && isAddingNewPatient && formData.patientName) {
+        toast.info('Creating new patient...');
+        const newPatient = await patientsApi.createQuick(
+          formData.patientName,
+          formData.newPatientPhone,
+          formData.newPatientEmail
+        );
+        patientId = newPatient.id!;
+        // Refresh patients list
+        loadPatients();
+      }
+
       const appointmentData: AppointmentData = {
-        patientId: formData.patientId || undefined,
+        patientId: patientId || undefined,
         patientName: formData.patientName,
         date: formData.date,
         time: formData.time,
@@ -530,25 +554,80 @@ export default function Appointments() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="text-sm font-medium text-foreground mb-1 block">Patient *</label>
-                <select 
-                  className="input-field"
-                  value={formData.patientId}
-                  onChange={(e) => handlePatientChange(e.target.value)}
-                >
-                  <option value="">Select a patient</option>
-                  {patients.map(patient => (
-                    <option key={patient.id} value={patient.id}>{patient.name}</option>
-                  ))}
-                </select>
-                {!formData.patientId && (
-                  <input 
-                    type="text" 
-                    className="input-field mt-2" 
-                    placeholder="Or enter patient name manually"
-                    value={formData.patientName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, patientName: e.target.value }))}
-                  />
+                <label className="text-sm font-medium text-foreground mb-2 block">Patient *</label>
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingNewPatient(false);
+                      setFormData(prev => ({ ...prev, patientName: '', newPatientPhone: '', newPatientEmail: '' }));
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 text-sm rounded-lg transition-colors",
+                      !isAddingNewPatient 
+                        ? "bg-primary text-primary-foreground" 
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    )}
+                  >
+                    Select Existing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingNewPatient(true);
+                      setFormData(prev => ({ ...prev, patientId: '', patientName: '' }));
+                    }}
+                    className={cn(
+                      "px-3 py-1.5 text-sm rounded-lg transition-colors",
+                      isAddingNewPatient 
+                        ? "bg-primary text-primary-foreground" 
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    )}
+                  >
+                    Add New Patient
+                  </button>
+                </div>
+                
+                {!isAddingNewPatient ? (
+                  <select 
+                    className="input-field"
+                    value={formData.patientId}
+                    onChange={(e) => handlePatientChange(e.target.value)}
+                  >
+                    <option value="">Select a patient</option>
+                    {patients.map(patient => (
+                      <option key={patient.id} value={patient.id}>{patient.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="space-y-3 p-3 bg-muted/30 rounded-lg border border-border">
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="Patient name *"
+                      value={formData.patientName}
+                      onChange={(e) => setFormData(prev => ({ ...prev, patientName: e.target.value }))}
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input 
+                        type="tel" 
+                        className="input-field" 
+                        placeholder="Phone (optional)"
+                        value={formData.newPatientPhone}
+                        onChange={(e) => setFormData(prev => ({ ...prev, newPatientPhone: e.target.value }))}
+                      />
+                      <input 
+                        type="email" 
+                        className="input-field" 
+                        placeholder="Email (optional)"
+                        value={formData.newPatientEmail}
+                        onChange={(e) => setFormData(prev => ({ ...prev, newPatientEmail: e.target.value }))}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      A new patient record will be created when you save this appointment.
+                    </p>
+                  </div>
                 )}
               </div>
               <div className="grid grid-cols-2 gap-4">
