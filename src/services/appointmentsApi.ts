@@ -28,9 +28,10 @@ export interface AppointmentResponse {
 const FUNCTION_URL = 'https://nmqkbmiqcycbfktjnbie.supabase.co/functions/v1/appointments';
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tcWtibWlxY3ljYmZrdGpuYmllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyODA0NDIsImV4cCI6MjA4Mjg1NjQ0Mn0.kDQYJFvk9i5pRMHO__FO2fQlS99wJ5JDU7Wm3isU_mI';
 
-// Common headers for all requests (no JWT required since functions use --no-verify-jwt)
+// Common headers for all requests - Authorization header required by Supabase edge functions
 const getHeaders = () => ({
   'Content-Type': 'application/json',
+  'Authorization': `Bearer ${ANON_KEY}`,
   'apikey': ANON_KEY,
 });
 
