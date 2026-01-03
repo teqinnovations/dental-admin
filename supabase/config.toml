@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.appointments]
 verify_jwt = false
+
+[functions.dentists]
+verify_jwt = false
