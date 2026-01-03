@@ -1,5 +1,3 @@
-import { supabase } from '@/lib/supabase';
-
 export interface AppointmentData {
   id?: string;
   patientId?: string;
@@ -28,6 +26,13 @@ export interface AppointmentResponse {
 }
 
 const FUNCTION_URL = 'https://nmqkbmiqcycbfktjnbie.supabase.co/functions/v1/appointments';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tcWtibWlxY3ljYmZrdGpuYmllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyODA0NDIsImV4cCI6MjA4Mjg1NjQ0Mn0.kDQYJFvk9i5pRMHO__FO2fQlS99wJ5JDU7Wm3isU_mI';
+
+// Common headers for all requests (no JWT required since functions use --no-verify-jwt)
+const getHeaders = () => ({
+  'Content-Type': 'application/json',
+  'apikey': ANON_KEY,
+});
 
 // Transform API response to frontend format
 const transformAppointment = (a: AppointmentResponse): AppointmentData & { id: string; createdAt: string } => ({
@@ -47,16 +52,9 @@ const transformAppointment = (a: AppointmentResponse): AppointmentData & { id: s
 export const appointmentsApi = {
   // Get all appointments
   async getAll() {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
     const response = await fetch(FUNCTION_URL, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tcWtibWlxY3ljYmZrdGpuYmllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyODA0NDIsImV4cCI6MjA4Mjg1NjQ0Mn0.kDQYJFvk9i5pRMHO__FO2fQlS99wJ5JDU7Wm3isU_mI',
-      },
+      headers: getHeaders(),
     });
 
     if (!response.ok) {
@@ -70,16 +68,9 @@ export const appointmentsApi = {
 
   // Get single appointment
   async getById(id: string) {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
     const response = await fetch(`${FUNCTION_URL}?id=${id}`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tcWtibWlxY3ljYmZrdGpuYmllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyODA0NDIsImV4cCI6MjA4Mjg1NjQ0Mn0.kDQYJFvk9i5pRMHO__FO2fQlS99wJ5JDU7Wm3isU_mI',
-      },
+      headers: getHeaders(),
     });
 
     if (!response.ok) {
@@ -93,16 +84,9 @@ export const appointmentsApi = {
 
   // Create appointment
   async create(appointment: AppointmentData) {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
     const response = await fetch(FUNCTION_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tcWtibWlxY3ljYmZrdGpuYmllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyODA0NDIsImV4cCI6MjA4Mjg1NjQ0Mn0.kDQYJFvk9i5pRMHO__FO2fQlS99wJ5JDU7Wm3isU_mI',
-      },
+      headers: getHeaders(),
       body: JSON.stringify(appointment),
     });
 
@@ -117,16 +101,9 @@ export const appointmentsApi = {
 
   // Update appointment
   async update(id: string, appointment: AppointmentData) {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
     const response = await fetch(`${FUNCTION_URL}?id=${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tcWtibWlxY3ljYmZrdGpuYmllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyODA0NDIsImV4cCI6MjA4Mjg1NjQ0Mn0.kDQYJFvk9i5pRMHO__FO2fQlS99wJ5JDU7Wm3isU_mI',
-      },
+      headers: getHeaders(),
       body: JSON.stringify(appointment),
     });
 
@@ -141,16 +118,9 @@ export const appointmentsApi = {
 
   // Delete appointment
   async delete(id: string) {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
-
     const response = await fetch(`${FUNCTION_URL}?id=${id}`, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tcWtibWlxY3ljYmZrdGpuYmllIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyODA0NDIsImV4cCI6MjA4Mjg1NjQ0Mn0.kDQYJFvk9i5pRMHO__FO2fQlS99wJ5JDU7Wm3isU_mI',
-      },
+      headers: getHeaders(),
     });
 
     if (!response.ok) {
