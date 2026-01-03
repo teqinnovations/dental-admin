@@ -20,7 +20,8 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const method = req.method;
 
-    console.log(`[Appointments] ${method} request received`);
+    console.log(`[Appointments] ${method} request received at ${new Date().toISOString()}`);
+    console.log(`[Appointments] URL: ${req.url}`);
 
     // GET - List all appointments or get single appointment
     if (method === 'GET') {
