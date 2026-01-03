@@ -6,6 +6,7 @@ export interface AppointmentData {
   time: string;
   duration: number;
   type: 'checkup' | 'cleaning' | 'filling' | 'extraction' | 'root-canal' | 'crown' | 'other';
+  dentistId: string;
   dentist: string;
   status: 'scheduled' | 'confirmed' | 'in-progress' | 'completed' | 'cancelled' | 'no-show';
   notes?: string;
@@ -19,6 +20,7 @@ export interface AppointmentResponse {
   time: string;
   duration: number;
   type: string;
+  dentist_id: string | null;
   dentist: string;
   status: string;
   notes: string | null;
@@ -44,6 +46,7 @@ const transformAppointment = (a: AppointmentResponse): AppointmentData & { id: s
   time: a.time,
   duration: a.duration,
   type: a.type as AppointmentData['type'],
+  dentistId: a.dentist_id || '',
   dentist: a.dentist,
   status: a.status as AppointmentData['status'],
   notes: a.notes || '',

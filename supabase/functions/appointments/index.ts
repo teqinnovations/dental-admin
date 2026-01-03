@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
 Deno.serve(async (req) => {
@@ -66,6 +67,30 @@ Deno.serve(async (req) => {
       const body = await req.json();
       console.log('[Appointments] Creating new appointment:', body);
 
+      // Check for slot availability (same date, time, and dentist)
+      const { data: existingAppointments, error: checkError } = await supabase
+        .from('appointments')
+        .select('id, patient_name, dentist')
+        .eq('date', body.date)
+        .eq('time', body.time)
+        .eq('dentist_id', body.dentistId)
+        .neq('status', 'cancelled');
+
+      if (checkError) {
+        console.error('[Appointments] Error checking slot availability:', checkError);
+        throw checkError;
+      }
+
+      if (existingAppointments && existingAppointments.length > 0) {
+        console.log('[Appointments] Slot already booked:', existingAppointments);
+        return new Response(JSON.stringify({ 
+          error: 'Please choose another time/slot - this is already booked' 
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 409,
+        });
+      }
+
       const { data, error } = await supabase
         .from('appointments')
         .insert([{
@@ -75,6 +100,7 @@ Deno.serve(async (req) => {
           time: body.time,
           duration: body.duration || 30,
           type: body.type,
+          dentist_id: body.dentistId,
           dentist: body.dentist,
           status: body.status || 'scheduled',
           notes: body.notes,
@@ -108,6 +134,31 @@ Deno.serve(async (req) => {
 
       console.log(`[Appointments] Updating appointment ${appointmentId}:`, body);
 
+      // Check for slot availability (same date, time, and dentist, excluding current appointment)
+      const { data: existingAppointments, error: checkError } = await supabase
+        .from('appointments')
+        .select('id, patient_name, dentist')
+        .eq('date', body.date)
+        .eq('time', body.time)
+        .eq('dentist_id', body.dentistId)
+        .neq('id', appointmentId)
+        .neq('status', 'cancelled');
+
+      if (checkError) {
+        console.error('[Appointments] Error checking slot availability:', checkError);
+        throw checkError;
+      }
+
+      if (existingAppointments && existingAppointments.length > 0) {
+        console.log('[Appointments] Slot already booked:', existingAppointments);
+        return new Response(JSON.stringify({ 
+          error: 'Please choose another time/slot - this is already booked' 
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 409,
+        });
+      }
+
       const { data, error } = await supabase
         .from('appointments')
         .update({
@@ -117,6 +168,7 @@ Deno.serve(async (req) => {
           time: body.time,
           duration: body.duration,
           type: body.type,
+          dentist_id: body.dentistId,
           dentist: body.dentist,
           status: body.status,
           notes: body.notes,

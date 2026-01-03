@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { appointmentsApi, AppointmentData } from '@/services/appointmentsApi';
 import { patientsApi } from '@/services/patientsApi';
+import { dentistsApi, DentistData } from '@/services/dentistsApi';
 
 const statusColors = {
   scheduled: 'bg-info/10 text-info border-info/30',
@@ -40,6 +41,7 @@ export default function Appointments() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [patients, setPatients] = useState<PatientOption[]>([]);
+  const [dentists, setDentists] = useState<DentistData[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   // Form state
@@ -50,15 +52,17 @@ export default function Appointments() {
     time: '',
     duration: 30,
     type: 'checkup' as AppointmentData['type'],
-    dentist: 'Dr. Smith',
+    dentistId: '',
+    dentist: '',
     status: 'scheduled' as AppointmentData['status'],
     notes: '',
   });
 
-  // Fetch appointments and patients on mount
+  // Fetch appointments, patients, and dentists on mount
   useEffect(() => {
     loadAppointments();
     loadPatients();
+    loadDentists();
   }, []);
 
   const loadAppointments = async () => {
@@ -73,6 +77,7 @@ export default function Appointments() {
         time: a.time,
         duration: a.duration,
         type: a.type,
+        dentistId: a.dentistId || '',
         dentist: a.dentist,
         status: a.status,
         notes: a.notes || '',
@@ -93,6 +98,23 @@ export default function Appointments() {
       setPatients(data.map(p => ({ id: p.id, name: p.name })));
     } catch (error) {
       console.error('Failed to load patients:', error);
+    }
+  };
+
+  const loadDentists = async () => {
+    try {
+      const data = await dentistsApi.getAll();
+      setDentists(data);
+      // Set default dentist if available
+      if (data.length > 0 && !formData.dentistId) {
+        setFormData(prev => ({ 
+          ...prev, 
+          dentistId: data[0].id, 
+          dentist: data[0].name 
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to load dentists:', error);
     }
   };
 
@@ -139,6 +161,7 @@ export default function Appointments() {
   const days = getDaysInMonth(currentDate);
 
   const handleAdd = () => {
+    const defaultDentist = dentists.length > 0 ? dentists[0] : null;
     setFormData({
       patientId: '',
       patientName: '',
@@ -146,7 +169,8 @@ export default function Appointments() {
       time: '',
       duration: 30,
       type: 'checkup',
-      dentist: 'Dr. Smith',
+      dentistId: defaultDentist?.id || '',
+      dentist: defaultDentist?.name || '',
       status: 'scheduled',
       notes: '',
     });
@@ -162,6 +186,7 @@ export default function Appointments() {
       time: apt.time,
       duration: apt.duration,
       type: apt.type,
+      dentistId: apt.dentistId,
       dentist: apt.dentist,
       status: apt.status,
       notes: apt.notes,
@@ -191,8 +216,17 @@ export default function Appointments() {
     }));
   };
 
+  const handleDentistChange = (dentistId: string) => {
+    const dentist = dentists.find(d => d.id === dentistId);
+    setFormData(prev => ({
+      ...prev,
+      dentistId,
+      dentist: dentist?.name || '',
+    }));
+  };
+
   const handleSave = async (isEdit: boolean) => {
-    if (!formData.patientName || !formData.date || !formData.time) {
+    if (!formData.patientName || !formData.date || !formData.time || !formData.dentistId) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -206,6 +240,7 @@ export default function Appointments() {
         time: formData.time,
         duration: formData.duration,
         type: formData.type,
+        dentistId: formData.dentistId,
         dentist: formData.dentist,
         status: formData.status,
         notes: formData.notes,
@@ -224,7 +259,8 @@ export default function Appointments() {
       loadAppointments();
     } catch (error) {
       console.error('Failed to save appointment:', error);
-      toast.error('Failed to save appointment');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save appointment';
+      toast.error(errorMessage);
     } finally {
       setIsSaving(false);
     }
@@ -566,14 +602,16 @@ export default function Appointments() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-foreground mb-1 block">Dentist</label>
+                  <label className="text-sm font-medium text-foreground mb-1 block">Dentist *</label>
                   <select 
                     className="input-field"
-                    value={formData.dentist}
-                    onChange={(e) => setFormData(prev => ({ ...prev, dentist: e.target.value }))}
+                    value={formData.dentistId}
+                    onChange={(e) => handleDentistChange(e.target.value)}
                   >
-                    <option>Dr. Smith</option>
-                    <option>Dr. Johnson</option>
+                    <option value="">Select a dentist</option>
+                    {dentists.map(dentist => (
+                      <option key={dentist.id} value={dentist.id}>{dentist.name}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
