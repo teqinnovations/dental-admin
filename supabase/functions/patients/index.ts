@@ -20,7 +20,8 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const method = req.method;
 
-    console.log(`[Patients] ${method} request received`);
+    console.log(`[Patients] ${method} request received at ${new Date().toISOString()}`);
+    console.log(`[Patients] URL: ${req.url}`);
 
     // GET - List all patients or get single patient
     if (method === 'GET') {
