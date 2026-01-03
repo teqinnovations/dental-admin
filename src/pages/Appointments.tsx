@@ -42,6 +42,7 @@ export default function Appointments() {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [patients, setPatients] = useState<PatientOption[]>([]);
   const [dentists, setDentists] = useState<DentistData[]>([]);
+  const [isDentistsLoading, setIsDentistsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   // Form state
@@ -102,19 +103,16 @@ export default function Appointments() {
   };
 
   const loadDentists = async () => {
+    setIsDentistsLoading(true);
     try {
       const data = await dentistsApi.getAll();
+      console.log('[Appointments] Loaded dentists:', data);
       setDentists(data);
-      // Set default dentist if available
-      if (data.length > 0 && !formData.dentistId) {
-        setFormData(prev => ({ 
-          ...prev, 
-          dentistId: data[0].id, 
-          dentist: data[0].name 
-        }));
-      }
     } catch (error) {
       console.error('Failed to load dentists:', error);
+      toast.error('Failed to load dentists. Please refresh the page.');
+    } finally {
+      setIsDentistsLoading(false);
     }
   };
 
@@ -607,12 +605,24 @@ export default function Appointments() {
                     className="input-field"
                     value={formData.dentistId}
                     onChange={(e) => handleDentistChange(e.target.value)}
+                    disabled={isDentistsLoading}
                   >
-                    <option value="">Select a dentist</option>
-                    {dentists.map(dentist => (
-                      <option key={dentist.id} value={dentist.id}>{dentist.name}</option>
-                    ))}
+                    {isDentistsLoading ? (
+                      <option value="">Loading dentists...</option>
+                    ) : dentists.length === 0 ? (
+                      <option value="">No dentists available</option>
+                    ) : (
+                      <>
+                        <option value="">Select a dentist</option>
+                        {dentists.map(dentist => (
+                          <option key={dentist.id} value={dentist.id}>{dentist.name}</option>
+                        ))}
+                      </>
+                    )}
                   </select>
+                  {!isDentistsLoading && dentists.length === 0 && (
+                    <p className="text-xs text-destructive mt-1">Please add dentists to the database first</p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1 block">Status</label>
